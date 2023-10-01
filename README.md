@@ -6,13 +6,9 @@ YouTube Data Harvesting and Warehousing is a project that intends to provide use
 **REQUIRED LIBRARIES:**
 
 **(1)** googleapiclient.discovery
-
 **(2)** streamlit
-
 **(3)** sqlite3
-
 **(4)** pymongo
-
 **(5)** pandas
 
 **FEATURES:**
