@@ -1,21 +1,21 @@
 # YouTube-Data-Harvesting-and-Warehousing-using-SQL-MongoDB-and-Streamlit
-YOUTUBE DATA HARVESTING AND WAREHOUSING
+**YOUTUBE DATA HARVESTING AND WAREHOUSING**
 
 YouTube Data Harvesting and Warehousing is a project that intends to provide users with the ability to access and analyse data from numerous YouTube channels. SQL, MongoDB, and Streamlit are used in the project to develop a user-friendly application that allows users to retrieve, save, and query YouTube channel and video data.
 
-REQUIRED LIBRARIES:
+**REQUIRED LIBRARIES:**
 
-googleapiclient.discovery
+**(1)** googleapiclient.discovery
 
-streamlit
+**(2)**streamlit
 
-psycopg2
+**(3)**sqlite3
 
-pymongo
+**(4)**pymongo
 
-pandas
+**(5)**pandas
 
-FEATURES:
+**FEATURES:**
 
 The following functions are available in the YouTube Data Harvesting and Warehousing application:
 
