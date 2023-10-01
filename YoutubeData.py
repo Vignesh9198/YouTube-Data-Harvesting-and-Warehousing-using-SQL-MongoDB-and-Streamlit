@@ -10,37 +10,49 @@ st.subheader('Domain :blue[Social Media] :sunglasses:')
 
 
 api = 'AIzaSyCi_FKyTGUBezocd4g2usVrmzeAbmeMOGI'
-ch_id = 'UCnFrHLm2qQsMb9nND5SsCrA'
 youtube = googleapiclient.discovery.build("youtube","v3",developerKey=api)
+import pandas as pd
 
-def Channel_Stats(ch_id):
+ch_id = [
+    'UCnFrHLm2qQsMb9nND5SsCrA',
+    'UCa9T0y46uK5FzJT-8tLBFeQ',
+    'UCR4z8ccOWNoUThB4VAMNBTg',
+    'UCFfFgeKVVhjXtQSXRj3e-Iw',
+    'UC9ysV5ALsSZAnKMdXqyDsYw',
+    'UCat88i6_rELqI_prwvjspRA',
+    'UC5cY198GU1MQMIPJgMkCJ_Q',
+    'UC9LjrPL1bLjJ2oIU3NSdcMQ',
+    'UC_gXhnzeF5_XIFn4gx_bocg',
+    'UCG0m9a2z1ziRm2YlaFuyU7A'
+]
+
+def Channel_Stats(youtube, ch_id):
+    all_data = []
+
     request = youtube.channels().list(
         part="snippet,contentDetails,statistics",
-        id=ch_id)
+        id=','.join(ch_id)
+    )
 
     response = request.execute()
 
-    z = dict(Channel_id = response["items"][0]["id"],
-              Channel_name = response["items"][0]["snippet"]["title"],
-              Channel_description = response["items"][0]["snippet"]["description"],
-              Channel_subscribers = response["items"][0]["statistics"]["subscriberCount"],
-              Channel_views = response["items"][0]["statistics"]["viewCount"],
-              Channel_videos = response["items"][0]["statistics"]["videoCount"],
-              Channel_published = response["items"][0]["snippet"]["publishedAt"],
-              playlists_id = response["items"][0]["contentDetails"]["relatedPlaylists"]["uploads"])
-    return z
+    for item in response['items']:
+        z = {
+            "Channel_id": item["id"],
+            "Channel_name": item["snippet"]["title"],
+            "Channel_description": item["snippet"]["description"],
+            "Channel_subscribers": item["statistics"]["subscriberCount"],
+            "Channel_views": item["statistics"]["viewCount"],
+            "Channel_videos": item["statistics"]["videoCount"],
+            "Channel_published": item["snippet"]["publishedAt"],
+            "playlists_id": item["contentDetails"]["relatedPlaylists"]["uploads"]
+        }
+        all_data.append(z)
 
-c = Channel_Stats(ch_id)
+    return all_data
 
-ChannelDetails = pd.DataFrame({"Channel_id" : [c["Channel_id"]],
-                              "Channel_name" : [c["Channel_name"]],
-                              "Channel_description" : [c["Channel_description"]],
-                              "Channel_subscribers" : [c["Channel_subscribers"]],
-                              "Channel_views" : [c["Channel_views"]],
-                              "Channel_videos" : [c["Channel_videos"]],
-                              "Channel_published" : [c["Channel_published"]],
-                              "playlists_id" : [c["playlists_id"]]
-                               })
+c = Channel_Stats(youtube, ch_id)
+ChannelDetails = pd.DataFrame(c)
 
 
 ChannelDetails["Channel_subscribers"]= ChannelDetails["Channel_subscribers"].astype(int)
@@ -48,9 +60,6 @@ ChannelDetails['Channel_views']= ChannelDetails['Channel_views'].astype(int)
 ChannelDetails['Channel_videos']= ChannelDetails['Channel_videos'].astype(int)
 ChannelDetails['Channel_published']= pd.to_datetime(ChannelDetails['Channel_published'])
 
-if ch_id and st.button('Channel_Details'):
-   a = Channel_Stats(ch_id)
-   st.write(a)
 
 def playlist_details(y): 
   request = youtube.playlists().list(
@@ -109,59 +118,75 @@ def get_video_ids(youtube, playlist_id):
 video_id = get_video_ids(youtube, playlists_id)
 
 
-video_ids = []
+def get_video_ids(youtube, playlist_id):
+    video_ids = []
 
-request = youtube.playlistItems().list(
-    part="snippet,contentDetails",
-    playlistId=playlists_id,
-    maxResults=50
-  )
-response = request.execute()
-
-for item in response['items']:
-    video_ids.append(item['contentDetails']['videoId'])
-
-n_p_t = response.get('nextPageToken')
-while n_p_t:
     request = youtube.playlistItems().list(
-        part="snippet,contentDetails",
-        playlistId=playlists_id,
-        maxResults=50,
-        pageToken=n_p_t
-      )
+        part='contentDetails',
+        playlistId=playlist_id,
+        maxResults=50
+    )
     response = request.execute()
+
     for item in response['items']:
         video_ids.append(item['contentDetails']['videoId'])
-    n_p_t = response.get('nextPageToken')
 
-print("Number of Videos : ",len(video_ids))
+    next_page_token = response.get('nextPageToken')
 
-def get_video_details(youtube,video_id):
-  all_video_info = []
+    while next_page_token:
+        request = youtube.playlistItems().list(
+            part='contentDetails',
+            playlistId=playlist_id,
+            maxResults=50,
+            pageToken=next_page_token
+        )
+        response = request.execute()
 
-  for i in range(0,len(video_ids),50):
-    request = youtube.videos().list(
-        part="snippet,contentDetails,statistics",
-        id=','.join(video_ids[i:i+50])
-      )
-  response = request.execute()
+        for item in response['items']:
+            video_ids.append(item['contentDetails']['videoId'])
 
-  for video in response['items']:
-    stats_to_keep = {'snippet' : ['title', 'description','publishedAt'],'statistics' : ['viewCount','likeCount','commentCount']}
+        next_page_token = response.get('nextPageToken')
 
-    video_info = {}
-    video_info['video_id'] = video['id']
+    return video_ids
 
-    for k in stats_to_keep.keys():
-      for v in stats_to_keep[k]:
-        try:
-          video_info[v] = video[k][v]
-        except:
-          video_info[v] = None
+def get_video_details(youtube, video_ids):
+    all_video_info = []
 
-    all_video_info.append(video_info)
+    for i in range(0, len(video_ids), 50):
+        request = youtube.videos().list(
+            part="snippet,contentDetails,statistics",
+            id=','.join(video_ids[i:i+50])
+        )
+        response = request.execute()
 
-  return all_video_info
+        for video in response['items']:
+            stats_to_keep = {
+                'snippet': ['channelId', 'title', 'description', 'publishedAt'],
+                'statistics': ['viewCount', 'likeCount', 'commentCount']
+            }
+
+            video_info = {}
+            video_info['video_id'] = video['id']
+
+            for k in stats_to_keep.keys():
+                for v in stats_to_keep[k]:
+                    try:
+                        video_info[v] = video[k][v]
+                    except:
+                        video_info[v] = None
+
+            all_video_info.append(video_info)
+
+    return all_video_info
+
+your_playlist_id = 'UUnFrHLm2qQsMb9nND5SsCrA'
+
+
+video_ids = get_video_ids(youtube, your_playlist_id)
+
+
+video_details = get_video_details(youtube, video_ids)
+
 
 all_video_info = get_video_details(youtube,video_id)
 
@@ -216,7 +241,7 @@ def fetch_comments(youtube, video_id):
 
     return comments
 
-comments = fetch_comments(youtube, videos_df['video_id'][0])
+comments = fetch_comments(youtube, videos_df['video_id'][5])
 
 comments_df = pd.DataFrame(comments)
 
@@ -230,7 +255,8 @@ client = pymongo.MongoClient("mongodb+srv://Vignesh_98:wekey1998@vignesh.ewc06kh
 
 db = client["youtube_detils"]
 col = db["ChannelDetails"]
-col.insert_one(c)
+documents = ChannelDetails.to_dict(orient='records')
+col.insert_many(documents)
 col1 = db["playlistDetails"]
 col1.insert_many(y)
 col2 = db["videos_details"]
@@ -251,188 +277,202 @@ videos_df = pd.read_sql_query("SELECT * FROM videos", conn, index_col="index")
 playlistDetails = pd.read_sql_query("SELECT * FROM playlistDetails", conn, index_col="index")
 comments_df = pd.read_sql_query("SELECT * FROM comments_details", conn, index_col="index")
 
-# What are the names of all the videos and their corresponding channels?
-query = """
+#(01) What are the names of all the videos and their corresponding channels
+
+query1 = """
 SELECT title, Channel_name
 FROM videos
 INNER JOIN ChannelDetails
 ON Channel_id = ChannelDetails.Channel_id
-LIMIT 50  -- Add LIMIT clause to limit the results to 50 rows
-"""
-
-results = conn.execute(query).fetchall()
-
-video_info = []
-
-
-for row in results:
-    title, channel_name = row
-    video_info.append(f"Video: {title}, '======>',Channel_name: {channel_name}")
-
-
-if st.button('Display Video Info'):
-    for item in video_info:
-        st.write(item)
-
-# Which channels have the most number of videos, and how many videos do they have?
-
-
-query1 = """select Channel_name,Channel_videos
-from ChannelDetails
-limit 1
 """
 results1 = conn.execute(query1).fetchall()
 
-top_ch_vi = [] 
+videos_name_channel = []
 
 for row in results1:
-    channel_name,channel_videos = row
-    top_ch_vi.append(f"Channel_name: {channel_name},'======>>',Channel_videos: {channel_videos}")
+  title, channel_name = row
+  videos_name_channel.append((title, channel_name))
 
-if st.button('Top channel_videos'):
-        st.write(top_ch_vi)
-
-#What are the top 10 most viewed videos and their respective channels?
-
-query2 = """
-SELECT title, viewCount, Channel_name
-FROM videos
-INNER JOIN ChannelDetails
-ON Channel_id = ChannelDetails.Channel_id
-ORDER BY viewCount DESC
-LIMIT 10
-"""
+videos_name_channel = pd.read_sql_query(query1, conn)
 
 
-results2 = conn.execute(query2).fetchall()
 
-top_viewed_videos = []
-
-for row in results2:
-    title, viewsCount, channel_name = row
-    top_viewed_videos.append(f"Video Title: {title},'=====>>', Views: {viewsCount},'=====>>', Channel Name: {channel_name}")
-
-if st.button('Top 10 Most Viewed Videos'):
-    for item in top_viewed_videos:
+if st.button('Videos_Name_Channel'):
+    for item in videos_name_channel:
         st.write(item)
 
-# How many comments were made on each video, and what are their corresponding video names?
+#(02) What are the names of all the videos and their corresponding channels
 
+query2= """
+SELECT
+    Channel_name AS ChannelName,
+    MAX(Channel_videos) AS MaxVideos
+FROM
+    ChannelDetails;
+"""
+result2 = conn.execute(query2).fetchall()
+
+most_num_videos_channel = []
+
+for row in result2:
+    channel_name, video_count = row
+    most_num_videos_channel.append((channel_name, video_count))
+  
+most_num_videos_channel = pd.read_sql_query(query2, conn)
+
+
+if st.button('Most_Num_Videos_Channel'):
+        st.write(most_num_videos_channel)
+
+
+#(03) Which videos have the highest number of views, and what are their corresponding channel names
 query3 = """
+SELECT DISTINCT title, viewCount
+FROM videos
+ORDER BY viewCount DESC
+LIMIT 10;
+"""
+
+results3 = conn.execute(query3).fetchall()
+
+top_10_videos = []
+
+for row in results3:
+    title, view_count = row
+    top_10_videos.append((title, view_count))
+
+top_10_videos = pd.read_sql_query(query3, conn)
+
+if st.button('Top 10 Most Viewed Videos'):
+    for item in top_10_videos :
+        st.write(item)
+
+#(04) Define the SQL query to retrieve the number of comments made on each video
+query4 = """
 SELECT title, commentCount
 FROM videos
 """
-results3 = conn.execute(query3).fetchall()
+results3 = conn.execute(query4).fetchall()
 
-comment_count = []
+videos_comments_count = []
 
 for row in results3:
-    title, commentCount = row
-    comment_count.append(f"Video Title: {title},'======>>', Comments: {commentCount}")
+    title, comment_count = row
+    videos_comments_count.append((title, comment_count))
 
-if st.button('Comment_count'):
-    for item in comment_count:
+videos_comments_count = pd.read_sql_query(query4, conn)
+
+
+if st.button('Videos_Cmments_Count '):
+    for item in videos_comments_count :
         st.write(item)
 
-# Which videos have the highest number of likes, and what are their corresponding channel names?
-
-query4 = """
-SELECT title,likeCount, Channel_name
-FROM videos
-INNER JOIN ChannelDetails
-ON Channel_id = ChannelDetails.Channel_id
-ORDER BY likeCount DESC
-LIMIT 10
-"""
-results4 = conn.execute(query4).fetchall()
-
-like_count = []
-
-for row in results4:
-    title,likeCount, channel_name = row
-    like_count.append(f"video_title: {title},'======>>Channel Name: {channel_name},'======>>', Likes: {likeCount}")
-
-if st.button('Top_Like_count'):
-    st.write(like_count)
-
-# What is the total number of likes and dislikes for each video, and what are their corresponding video names?
+#(05) Which videos have the highest number of likes, and what are their corresponding channel names
 
 query5 = """
-SELECT title,likeCount
-FROM videos
+SELECT DISTINCT title AS Video_Title, Channel_name AS Channel_Name, likeCount AS Likes_Count
+FROM videos AS v
+JOIN ChannelDetails AS cd ON channelId = Channel_id
 ORDER BY likeCount DESC
-LIMIT 10
+LIMIT 10;
 """
-results4 = conn.execute(query5).fetchall()
+results5 = conn.execute(query5).fetchall()
 
-video_likes = []
+highly_liked_videos = []
 
-for row in results4:
-    title,likeCount = row
-    video_likes.append(f"video_title: {title},'======>>', Likes: {likeCount}")
-
-if st.button('Videos_Most_likes'):
-    st.write(video_likes)
-
-# What is the total number of views for each channel, and what are their corresponding channel names?
+for row in results5:
+    title, channel_name, likes_count = row
+    highly_liked_videos.append((title, channel_name, likes_count))
 
 
-query6 = """ SELECT Channel_name , Channel_views
-FROM ChannelDetails
-ORDER BY Channel_views DESC
-LIMIT 1
+highly_liked_videos = pd.read_sql_query(query5, conn)
+
+
+if st.button('Highly_Liked_Videos'):
+    st.write(highly_liked_videos)
+
+#(07) What is the total number of views for each channel, and what are their corresponding channel names
+
+query7 ="""
+SELECT
+    Channel_name,
+    SUM(Channel_views) AS Total_Views
+FROM
+    ChannelDetails
+
+GROUP BY
+    Channel_name
+ORDER BY Total_Views DESC
 """
-results6 = conn.execute(query6).fetchall()
+results5 = conn.execute(query7).fetchall()
 
-Top_Channel_views = []
+channel_views = []
+
+for row in results5:
+    channel_name, total_views = row
+    channel_views.append((channel_name, total_views))
+
+channel_views = pd.read_sql_query(query7, conn)
+
+
+if st.button('channel_views'):
+    st.write(channel_views)
+#(08) What are the names of all the channels that have published videos in the year 2022
+
+query = """
+SELECT DISTINCT Channel_name
+FROM videos AS v
+INNER JOIN ChannelDetails AS c ON channelId = Channel_id
+WHERE strftime('%Y', publishedAt) = '2022';
+"""
+
+results6 = conn.execute(query).fetchall()
+
+published2022_channel = []
 
 for row in results6:
-  channel_name,channel_views = row
-  Top_Channel_views.append(f"Channel_name: {channel_name},'======>>'Channel_views: {channel_views}")
+    channel_name = row
+    published2022_channel.append(channel_name)  
 
-if st.button('Top_Channel_Views'):
-    st.write(Top_Channel_views)
+published2022_channel = pd.read_sql_query(query, conn)
 
-#What are the names of all the channels that have published videos in the year 2020?
 
-query7 = """
-SELECT title, publishedAt
-FROM videos
-limit 20
-"""
+if st.button('published2022_channel'):
+    st.write(published2022_channel)
 
-results7 = conn.execute(query7).fetchall()
 
-published_videos_2020 = []
 
-for row in results7:
-    title, publishedAt = row
-    published_videos_2020.append(f"VIDEO TITLE: {title}, PUBLISHED AT: {publishedAt}")
+#(10) Which videos have the highest number of comments, and what are their corresponding channel names
 
-if st.button('Show Published Videos in 2020'):
-    for item in published_videos_2020:
+query10 = '''
+SELECT
+    title AS Video_Title,
+    ChannelDetails.Channel_name AS Channel_Name,
+    MAX(commentCount) AS Max_Comment_Count
+FROM
+    videos
+JOIN
+    ChannelDetails ON videos.channelId = ChannelDetails.Channel_id
+GROUP BY
+    Video_Title, Channel_Name
+ORDER BY
+    Max_Comment_Count DESC
+LIMIT 10;
+'''
+
+result7 = conn.execute(query10).fetchall()
+
+highy_commented_videos = []
+
+for row in result7:
+    title, channel_name, comment_count = row
+    highy_commented_videos.append((title, channel_name, comment_count))
+
+highy_commented_videos = pd.read_sql_query(query10, conn)
+
+
+if st.button('Highy_Commented_Videos'):
+    for item in highy_commented_videos:
         st.write(item)
-        
 
-# Which videos have the highest number of comments, and what are their corresponding channel names?
-
-query8 = """
-SELECT videos.title,commentCount, ChannelDetails.Channel_name
-FROM videos
-INNER JOIN ChannelDetails ON Channel_id = ChannelDetails.Channel_id
-ORDER BY commentCount DESC
-Limit 1
-"""
-
-results8 = conn.execute(query8).fetchall()
-
-top_commented_videos = []
-
-for row in results8:
-    title, commentCount, channel_name = row
-    top_commented_videos.append(f"Video Title: {title}, '=====>>', Comments: {commentCount}, '=====>>', Channel Name: {channel_name}")
-
-if st.button('Top Commented Videos'):
-    for item in top_commented_videos:
-        st.write(item)
 
